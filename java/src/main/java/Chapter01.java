@@ -10,7 +10,7 @@ public class Chapter01 {
 
     public static final void main(String[] args) {
 //        new Chapter01().run();
-        Jedis jedis = new Jedis("mailke.cn",6379);
+        Jedis jedis = new Jedis("mailke.cn", 6379);
         for (int i = 0; i < 10000; i++) {
             jedis.pfadd("leimin", "user" + i);
 
@@ -26,11 +26,11 @@ public class Chapter01 {
         conn.select(15);
 
         String articleId = postArticle(
-            conn, "username", "A title", "http://www.google.com");
+                conn, "username", "A title", "http://www.google.com");
         System.out.println("We posted a new article with id: " + articleId);
         System.out.println("Its HASH looks like:");
-        Map<String,String> articleData = conn.hgetAll("article:" + articleId);
-        for (Map.Entry<String,String> entry : articleData.entrySet()){
+        Map<String, String> articleData = conn.hgetAll("article:" + articleId);
+        for (Map.Entry<String, String> entry : articleData.entrySet()) {
             System.out.println("  " + entry.getKey() + ": " + entry.getValue());
         }
 
@@ -42,7 +42,7 @@ public class Chapter01 {
         assert Integer.parseInt(votes) > 1;
 
         System.out.println("The currently highest-scoring articles are:");
-        List<Map<String,String>> articles = getArticles(conn, 1);
+        List<Map<String, String>> articles = getArticles(conn, 1);
         printArticles(articles);
         assert articles.size() >= 1;
 
@@ -62,7 +62,7 @@ public class Chapter01 {
 
         long now = System.currentTimeMillis() / 1000;
         String article = "article:" + articleId;
-        HashMap<String,String> articleData = new HashMap<String,String>();
+        HashMap<String, String> articleData = new HashMap<String, String>();
         articleData.put("title", title);
         articleData.put("link", link);
         articleData.put("user", user);
@@ -77,7 +77,7 @@ public class Chapter01 {
 
     public void articleVote(Jedis conn, String user, String article) {
         long cutoff = (System.currentTimeMillis() / 1000) - ONE_WEEK_IN_SECONDS;
-        if (conn.zscore("time:", article) < cutoff){
+        if (conn.zscore("time:", article) < cutoff) {
             return;
         }
 
@@ -89,22 +89,34 @@ public class Chapter01 {
     }
 
 
-    public List<Map<String,String>> getArticles(Jedis conn, int page) {
+    public List<Map<String, String>> getArticles(Jedis conn, int page) {
 //        conn.
-
 
 
         return getArticles(conn, page, "score:");
     }
 
-    public List<Map<String,String>> getArticles(Jedis conn, int page, String order) {
+    /**
+     * 代码清单1-8
+     * 1。 获取分页文章的ids;
+     * 2。 获取分页文章的所有信息；
+     *
+     * @param conn redis 链接
+     * @param page 查询文章的页码
+     * @param order 文章分组数据zset 的key
+     * @return 分页文章的查询结果
+     */
+    public List<Map<String, String>> getArticles(Jedis conn, int page, String order) {
+
         int start = (page - 1) * ARTICLES_PER_PAGE;
         int end = start + ARTICLES_PER_PAGE - 1;
 
+        // 获取分页文章的ID；
         Set<String> ids = conn.zrevrange(order, start, end);
-        List<Map<String,String>> articles = new ArrayList<Map<String,String>>();
-        for (String id : ids){
-            Map<String,String> articleData = conn.hgetAll(id);
+        List<Map<String, String>> articles = new ArrayList<Map<String, String>>();
+        for (String id : ids) {
+            // 根据文章ID，获取文章的所有信息；
+            Map<String, String> articleData = conn.hgetAll(id);
             articleData.put("id", id);
             articles.add(articleData);
         }
@@ -119,25 +131,41 @@ public class Chapter01 {
         }
     }
 
-    public List<Map<String,String>> getGroupArticles(Jedis conn, String group, int page) {
+    public List<Map<String, String>> getGroupArticles(Jedis conn, String group, int page) {
         return getGroupArticles(conn, group, page, "score:");
     }
 
-    public List<Map<String,String>> getGroupArticles(Jedis conn, String group, int page, String order) {
+    /**
+     * 代码清单1-10
+     * 1。 将文章加入分组的zset中；
+     * 2。 获取zset中的分页数据；
+     *
+     * @param conn redis 链接
+     * @param group 指定分组名称
+     * @param page 页码数
+     * @param order 文章zset
+     * @return 分组后的所有文章
+     */
+    public List<Map<String, String>> getGroupArticles(Jedis conn, String group, int page, String order) {
+
+        // 构建文章分组的键名
         String key = order + group;
         if (!conn.exists(key)) {
             ZParams params = new ZParams().aggregate(ZParams.Aggregate.MAX);
+
+            // 将group:group、order中的文章，取最大值，加入key中
             conn.zinterstore(key, params, "group:" + group, order);
             conn.expire(key, 60);
+
         }
         return getArticles(conn, page, key);
     }
 
-    private void printArticles(List<Map<String,String>> articles){
-        for (Map<String,String> article : articles){
+    private void printArticles(List<Map<String, String>> articles) {
+        for (Map<String, String> article : articles) {
             System.out.println("  id: " + article.get("id"));
-            for (Map.Entry<String,String> entry : article.entrySet()){
-                if (entry.getKey().equals("id")){
+            for (Map.Entry<String, String> entry : article.entrySet()) {
+                if (entry.getKey().equals("id")) {
                     continue;
                 }
                 System.out.println("    " + entry.getKey() + ": " + entry.getValue());
